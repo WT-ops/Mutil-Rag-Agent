@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: 单元测试（无外部依赖）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装测试依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: 运行单元测试
+        run: pytest -q
+
+  full-deps:
+    name: 完整依赖回归（允许失败）
+    runs-on: ubuntu-latest
+    # requirements.txt 用的是范围依赖且含 ragas 等重包，上游一旦发版漂移就会装不上。
+    # 这里保留完整依赖的一次回归，但不阻塞主分支：先保证"纯逻辑"测试永远绿。
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装完整依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: 运行单元测试
+        run: pytest -q

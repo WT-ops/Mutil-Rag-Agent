@@ -1,0 +1,13 @@
+# 单元测试依赖：刻意只装"纯函数级"依赖，不拉 pymilvus / langgraph / ragas 等重包。
+# 目标：CI 1 分钟内跑完，改坏一个权限分支就能立刻变红。
+pytest>=8.0,<9.0
+pytest-cov>=5.0,<7.0
+
+# 被测模块的运行时依赖（见 app/runtime、app/core、app/queue 的模块级 import）
+pydantic>=2.9.0,<3.0.0
+pydantic-settings>=2.5.0
+loguru>=0.7.2
+langchain-core>=1.2.0,<2.0.0
+rank_bm25>=0.2.2
+PyYAML>=6.0
+python-dotenv>=1.0.1

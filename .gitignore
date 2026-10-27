@@ -57,3 +57,8 @@ coverage/
 *.sqlite
 *.sqlite3
 *.db
+
+# local env override
+docker-compose.override.yml
+# local archive
+archive/
