@@ -348,6 +348,10 @@ class Settings(BaseSettings):
     mcp_network_url: str = Field(default="http://localhost:8009/mcp", description="网络诊断 MCP URL")
     mcp_docker_transport: str = Field(default="streamable-http", description="Docker 管理 MCP 传输")
     mcp_docker_url: str = Field(default="http://localhost:8011/mcp", description="Docker 管理 MCP URL")
+    mcp_windows_host_url: str = Field(
+        default="",
+        description="Windows 主机 MCP URL；留空表示不启用"
+    )
 
     # ==================== Agent ====================
     agent_max_steps: int = Field(default=5, description="Plan-Execute 最大步骤 (防死循环)")
@@ -603,7 +607,7 @@ class Settings(BaseSettings):
         将扁平字段转为 langchain-mcp-adapters 期望的嵌套字典.
         新增 MCP 服务时, 在此添加映射.
         """
-        return {
+        servers =  {
             "system": {
                 "transport": self.mcp_system_transport,
                 "url": self.mcp_system_url,
@@ -625,6 +629,14 @@ class Settings(BaseSettings):
                 "url": self.mcp_docker_url,
             },
         }
+        
+        if self.mcp_windows_host_url:
+            servers["windows_host"] = {
+                "transport": "streamable-http",
+                "url": self.mcp_windows_host_url,
+            }
+
+        return servers
 
     # ==================== 校验 ====================
     @field_validator("dashscope_api_key")

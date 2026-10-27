@@ -148,6 +148,15 @@ TOOL_META: Dict[str, ToolMeta] = {
         max_result_chars=4000,
         risk_level="low",
         search_hint="top processes 进程",
+    ), 
+    "get_windows_host_metrics": ToolMeta(
+        read_only=True,
+        concurrency_safe=True,
+        destructive=False,
+        side_effect="network",
+        risk_level="low",
+        max_result_chars=4000,
+        search_hint="Windows host CPU memory processes Windows主机内存进程",
     ),
 
     # ===== Prometheus (prom_tool.py) =====
