@@ -1,0 +1,25 @@
+{"id": "W01", "expected": "windows_host", "note": "显式宿主机 + 明确要求区分容器", "query": "请诊断我当前 Windows 宿主机的内存使用情况。必须使用实际可用的 Windows 主机监控工具获取数据，区分 Windows 宿主机与 Docker 容器。"}
+{"id": "W02", "expected": "windows_host", "note": "容器只作对照，不是采集目标", "query": "诊断 Windows 宿主机的内存，Docker 容器只用来作对照"}
+{"id": "W03", "expected": "windows_host", "note": "版本号形态的显式 Windows", "query": "分析 Windows 11 的内存使用情况"}
+{"id": "W04", "expected": "windows_host", "note": "口语化指代（我的笔记本）", "query": "排查我的笔记本内存异常"}
+{"id": "W05", "expected": "windows_host", "note": "无诊断动词，靠对象识别", "query": "帮我看看 Windows 的内存"}
+{"id": "W06", "expected": "windows_host", "note": "英文输入", "query": "diagnose windows host memory usage"}
+{"id": "W07", "expected": "windows_host", "note": "显式排除容器数据", "query": "诊断我电脑的 CPU 占用，不要用容器里的数据"}
+{"id": "W08", "expected": "windows_host", "note": "真实用户口语（电脑卡）", "query": "我电脑很卡，检查 CPU、内存、磁盘和高占用进程"}
+{"id": "W09", "expected": "windows_host", "note": "否定式转场：先排除容器再指定宿主机", "query": "先不要看容器，诊断 Windows 宿主机的磁盘"}
+{"id": "D01", "expected": "docker_container", "note": "否定句里的宿主机不能成为目标", "query": "检查 Docker 容器内存，不要使用 Windows 宿主机的数据"}
+{"id": "D02", "expected": "docker_container", "note": "口语化 + 明确容器对象", "query": "诊断我电脑上的 Docker 容器内存"}
+{"id": "D03", "expected": "docker_container", "note": "否定前句 + 改为后句", "query": "不要检查 Windows 宿主机，改为诊断 Docker 容器"}
+{"id": "D04", "expected": "docker_container", "note": "工具名出现在输入里", "query": "查询 docker_stats 对应的 Docker 容器资源"}
+{"id": "D05", "expected": "docker_container", "note": "对照语义在逗号后", "query": "检查 Docker 容器内存，Windows 宿主机数据仅作对照"}
+{"id": "D06", "expected": "docker_container", "note": "“而不是”对照结构", "query": "诊断 Docker 容器而不是 Windows 宿主机"}
+{"id": "D07", "expected": "docker_container", "note": "英文输入", "query": "check docker container memory usage"}
+{"id": "U01", "expected": "unspecified", "note": "显式要求两类环境对比", "query": "比较 Windows 宿主机和 Docker 容器的内存使用率"}
+{"id": "U02", "expected": "unspecified", "note": "同一动作要求两类环境", "query": "同时诊断 Windows 宿主机和 Docker 容器内存"}
+{"id": "U03", "expected": "unspecified", "note": "“资源差异”仍是双目标", "query": "诊断 Windows 宿主机和 Docker 容器的资源差异"}
+{"id": "U04", "expected": "unspecified", "note": "与宿主环境无关的服务问题", "query": "检查 PostgreSQL 连接池"}
+{"id": "U05", "expected": "unspecified", "note": "只有“宿主机”这个词，无法判断平台", "query": "诊断宿主机内存"}
+{"id": "U06", "expected": "unspecified", "note": "空输入", "query": ""}
+{"id": "U07", "expected": "unspecified", "note": "否定句不应推导出任何目标", "query": "不要诊断 Windows 宿主机和 Docker 容器，先说明思路"}
+{"id": "U08", "expected": "unspecified", "note": "告警业务描述，无环境信息", "query": "Redis 实例 redis-master-01 内存使用率 98%，客户端连接被强制断开，请用 deep 模式交叉取证"}
+{"id": "U09", "expected": "unspecified", "note": "口语化，无环境信息", "query": "帮我看看磁盘是不是满了"}

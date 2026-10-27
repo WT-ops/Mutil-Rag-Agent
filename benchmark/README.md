@@ -82,3 +82,16 @@ python benchmark/run_benchmark.py ragas
 
 - `benchmark/reports/retrieval_*.json`
 - `benchmark/reports/ragas_*.json`
+
+## 目标环境隔离（`target_environment_cases.jsonl`）
+
+`target_environment_cases.jsonl` 是 25 条标注了"正确诊断目标"的问法，覆盖否定句、
+对照句、双目标、口语化与英文输入。对应的评测脚本：
+
+```bash
+python scripts/eval_target_environment.py
+```
+
+输出写入 `reports/target_environment_report.md`，包含三个指标：
+识别准确率、过滤后错误环境工具暴露数（应为 0）、计划侧非法步骤拦截率。
+该评测不调用 LLM，纯规则、可逐条复现，适合放进 CI 作为回归基线。
