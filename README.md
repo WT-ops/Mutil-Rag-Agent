@@ -1,5 +1,7 @@
 # Multi-Agent AIOps Platform V3
 
+[![CI](https://github.com/WT-ops/Mutil-Rag-Agent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/WT-ops/Mutil-Rag-Agent/actions/workflows/ci.yml)
+
 > ## 本仓库说明（Fork）
 >
 > Fork 自 [Kkkirito-123/Mutil-Rag-Agent](https://github.com/Kkkirito-123/Mutil-Rag-Agent)——OnCall 场景的
