@@ -23,6 +23,92 @@ from app.runtime.transitions import (
 )
 from app.skills import get_skill_registry
 
+import re
+
+from app.runtime.target_environment import (
+    detect_target_environment,
+    LOCAL_SYSTEM_TOOLS,
+    WINDOWS_TOOLS,
+    DOCKER_TOOLS,
+    UNVERIFIED_TOOLS,
+    BYPASS_TOOLS,
+)
+
+
+def sanitize_steps_for_target(
+    steps: list[str],
+    target: str,
+    *,
+    append_required_steps: bool = True,
+) -> list[str]:
+    """移除明确引用错误环境工具的计划步骤。"""
+
+    blocked = (
+        set(LOCAL_SYSTEM_TOOLS)
+        | set(UNVERIFIED_TOOLS)
+        | set(BYPASS_TOOLS)
+    )
+
+    if target == "windows_host":
+        blocked.update(DOCKER_TOOLS)
+    elif target == "docker_container":
+        blocked.update(WINDOWS_TOOLS)
+    else:
+        blocked.update(WINDOWS_TOOLS)
+        blocked.update(DOCKER_TOOLS)
+
+    valid_steps = []
+
+    for step in steps:
+        invalid = [
+            name for name in blocked
+            if re.search(
+                rf"(?<!\w){re.escape(name)}(?!\w)",
+                step,
+            )
+        ]
+
+        if invalid:
+            logger.warning(
+                f"[PlanGuard] removed step={step} "
+                f"blocked_tools={invalid}"
+            )
+            continue
+
+        valid_steps.append(step)
+        
+    # Replanner 只过滤非法步骤，不自动补充新步骤
+    if not append_required_steps:
+        return valid_steps
+
+    # Windows 诊断至少安排一次真实主机采集
+    if target == "windows_host":
+        has_windows_tool = any(
+            "get_windows_host_metrics" in s
+            for s in valid_steps
+        )
+
+        if not has_windows_tool:
+            valid_steps.insert(
+                0,
+                "调用 get_windows_host_metrics 获取 "
+                "Windows 主机 CPU、内存和进程数据",
+            )
+
+    if not valid_steps:
+        valid_steps.append(
+            "明确诊断目标与证据来源；"
+            "没有实时证据时说明限制"
+        )
+
+    if not any(
+        "汇总诊断结论" in s for s in valid_steps
+    ):
+        valid_steps.append(
+            "汇总诊断结论，区分真实证据和推测"
+        )
+
+    return valid_steps
 
 async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
     """Planner 节点: 输入 state.input + state.selected_skill, 输出 state.plan."""
@@ -80,6 +166,19 @@ async def plan_node(state: PlanExecuteState) -> PlanExecuteState:
             "pending_reroute": False,
             "transition_history": [make_transition("planner", PLANNER_EMPTY_STEPS, "LLM 返回空 steps")],
         }
+    
+    
+    target_env = detect_target_environment(user_input)
+
+    plan.steps = sanitize_steps_for_target(
+        plan.steps,
+        target_env,
+    )
+
+    logger.info(
+        f"[PlanGuard] target={target_env} "
+        f"validated_steps={plan.steps}"
+    )
 
     logger.info(f"[Planner] 已生成 {len(plan.steps)} 步计划 (skill={skill.name}):")
     for i, step in enumerate(plan.steps, 1):
