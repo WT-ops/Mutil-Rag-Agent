@@ -16,3 +16,11 @@ data/wiki/
 docker-compose.yml.bak-bind-mounts
 node_modules/
 open-webSearch-main/node_modules/
+
+# Protect secrets and exclude Windows virtual environment
+.env
+.env.*
+!.env.example
+.venv/
+**/.venv/
+docker-compose.override.yml

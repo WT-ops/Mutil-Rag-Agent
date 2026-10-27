@@ -35,9 +35,11 @@ langchain-milvus>=0.3.3,<0.4.0
 # 不引入额外服务. 大规模时再迁外部 BM25 服务.
 rank_bm25>=0.2.2
 
+
 # ---------- MCP (Model Context Protocol) ----------
-fastmcp>=2.14.0
-langchain-mcp-adapters>=0.2.1,<0.3.0
+fastmcp>=2.14.0,<3.0.0
+langchain-mcp-adapters==0.2.2
+mcp>=1.24.0,<2.0.0
 
 # ---------- 配置与数据校验 ----------
 pydantic>=2.9.0,<3.0.0
