@@ -61,6 +61,8 @@ class PlanExecuteState(TypedDict, total=False):
     skill_reason: str
     plan: List[str]
     past_steps: Annotated[List[Tuple[str, str]], operator.add]
+    # 实际工具返回记录，与 Planner 步骤分开保存
+    tool_evidence: Annotated[List[dict], operator.add]
     response: str
     iteration: int
     permission_mode: str

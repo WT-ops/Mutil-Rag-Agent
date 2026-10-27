@@ -11,6 +11,7 @@
 import re
 from datetime import datetime
 
+from app.runtime.tool_evidence import find_unrecorded_tool_mentions
 from loguru import logger
 
 from app.agents.state import Act, PlanExecuteState, TriedSkill
@@ -30,6 +31,8 @@ from app.runtime.transitions import (
 )
 from app.skills import get_skill_registry
 
+from app.agents.planner import sanitize_steps_for_target
+from app.runtime.target_environment import detect_target_environment
 
 def _format_past_steps(past_steps: list[tuple[str, str]]) -> str:
     return get_agent_harness().format_past_steps(past_steps)
@@ -49,6 +52,7 @@ async def _synthesize_final_report(
     past_steps: list[tuple[str, str]],
     current_time: str,
     draft: str = "",
+    tool_evidence: list[dict] | None = None,
 ) -> str:
     """用 report_model (默认 pro) 基于 past_steps 写高质量最终报告.
 
@@ -60,13 +64,9 @@ async def _synthesize_final_report(
     report_model = harness.report_model()
     decide_model = harness.report_decision_model()
     # 如果 report_model 和 decide 用的是同一个模型, 说明用户没分层, 直接用 draft 省一次调用.
-    if not draft.strip() and not past_steps:
+    if not draft.strip() and not past_steps and not tool_evidence:
         return ""
-    if report_model == decide_model and draft.strip():
-        logger.debug(
-            f"[Report] report_model={report_model} 与 replanner 同模型且草稿非空, 跳过二次合成"
-        )
-        return draft
+
     try:
         llm = get_chat_llm(
             model=report_model,
@@ -80,6 +80,7 @@ async def _synthesize_final_report(
                 past_steps=past_steps,
                 current_time=current_time,
                 draft=draft,
+                tool_evidence=tool_evidence,
             )
         )
         content = getattr(resp, "content", str(resp))
@@ -89,18 +90,54 @@ async def _synthesize_final_report(
                 for c in content
             )
         text = (content or "").strip()
+
         if not text:
-            logger.warning("[Report] pro 返回空文本, 回退 draft")
-            return draft
-        logger.info(
-            f"[Report] 用 {report_model} 合成最终报告, len={len(text)} (草稿 len={len(draft)})"
+            logger.warning(
+                "[Report] 报告模型返回空文本，使用真实工具证据兜底"
+            )
+            return _force_summary(
+                user_input,
+                past_steps,
+                current_time,
+                tool_evidence=tool_evidence,
+            )
+        
+        # 生成后校验：是否提及未记录的工具
+        unrecorded_tools = find_unrecorded_tool_mentions(
+            text,
+            tool_evidence or [],
         )
+
+        if unrecorded_tools:
+            logger.warning(
+                "[ReportGuard] 检测到未记录的工具引用: {}",
+                unrecorded_tools,
+            )
+
+            # 不直接使用可能存在错误归因的报告
+            return _force_summary(
+                user_input,
+                past_steps,
+                current_time,
+                tool_evidence=tool_evidence,
+            )
+
+        logger.info(
+            f"[Report] 用 {report_model} 合成最终报告, "
+            f"len={len(text)}"
+        )
+
         return text
     except Exception as e:
         logger.warning(
-            f"[Report] 用 {report_model} 合成报告失败 ({type(e).__name__}: {e}), 回退 draft"
+            f"[Report] 报告合成失败: {type(e).__name__}: {e}"
         )
-        return draft
+        return _force_summary(
+            user_input,
+            past_steps,
+            current_time,
+            tool_evidence=tool_evidence,
+        )
 
 
 def _current_report_time() -> str:
@@ -207,8 +244,10 @@ def _validate_reroute(
 async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
     """Replanner 节点: 决定继续执行下一步, 或终止并给出报告."""
     user_input = state.get("input", "")
+    target_env = detect_target_environment(user_input)
     plan = state.get("plan", [])
     past_steps = state.get("past_steps", [])
+    tool_evidence = state.get("tool_evidence", [])
     iteration = state.get("iteration", 0)
     selected_skill = state.get("selected_skill", "")
     tried_skills = state.get("tried_skills", [])
@@ -222,17 +261,70 @@ async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
     )
 
     harness_decision = get_agent_harness().evaluate_replanner_pre_llm(state)
+    
     if harness_decision.action == "continue_fast_path":
-        next_plan = list(harness_decision.data.get("next_plan") or [])
-        logger.info(
-            f"[Replanner] Harness 快路径: {harness_decision.reason}, 剩余 {len(next_plan)} 步"
+        raw_next_plan = list(
+            harness_decision.data.get("next_plan") or []
         )
+
+        next_plan = sanitize_steps_for_target(
+            raw_next_plan,
+            target_env,
+            append_required_steps=False,
+        )
+
+        logger.info(
+            f"[PlanGuard] fast_path target={target_env} "
+            f"before={len(raw_next_plan)} "
+            f"after={len(next_plan)}"
+        )
+
+        # 如果所有剩余步骤都不合法，安全结束流程
+        if not next_plan:
+            logger.warning(
+                "[PlanGuard] fast_path 无合法剩余步骤，停止执行"
+            )
+
+            report = _force_summary(
+                user_input,
+                past_steps,
+                current_time,
+                tool_evidence=tool_evidence,
+            )
+
+            report += (
+                "\n\n**诊断限制**：后续计划中的工具"
+                "不符合目标环境约束，已停止执行。"
+                "被过滤的步骤没有实际执行，"
+                "不得将其作为诊断证据。"
+            )
+
+            return {
+                "response": report,
+                "plan": [],
+                "transition_history": [
+                    make_transition(
+                        "replanner",
+                        REPLANNER_NOT_FINISHED_EMPTY,
+                        "fast_path: invalid steps filtered",
+                    ),
+                ],
+            }
+
+        logger.info(
+            f"[Replanner] Harness 快路径: "
+            f"{harness_decision.reason}, "
+            f"剩余 {len(next_plan)} 步"
+        )
+
         return {
             "plan": next_plan,
             "transition_history": [
                 make_transition(
-                    "replanner", REPLANNER_CONTINUE,
-                    f"harness:{harness_decision.reason}: 剩余 {len(next_plan)} 步",
+                    "replanner",
+                    REPLANNER_CONTINUE,
+                    f"harness:{harness_decision.reason}: "
+                    f"剩余 {len(next_plan)} 步",
                 ),
             ],
         }
@@ -243,7 +335,12 @@ async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
         )
         logger.warning(f"[Replanner] Harness 强制收敛: {reason}")
         return {
-            "response": _force_summary(user_input, past_steps, current_time),
+            "response": _force_summary(
+               user_input,
+               past_steps,
+               current_time,
+               tool_evidence=tool_evidence,
+            ),
             "plan": [],
             "transition_history": [
                 make_transition("replanner", transition_reason, str(harness_decision.data)),
@@ -291,7 +388,12 @@ async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
         logger.exception(f"[Replanner] 结构化输出失败, 兜底生成报告: {e}")
         logger.warning(f"[transition] node=replanner reason={REPLANNER_LLM_FAILED} detail={detail}")
         return {
-            "response": _force_summary(user_input, past_steps, current_time),
+            "response": _force_summary(
+               user_input,
+               past_steps,
+               current_time,
+               tool_evidence=tool_evidence,
+            ),
             "plan": [],
             "transition_history": [
                 make_transition("replanner", REPLANNER_LLM_FAILED, detail),
@@ -354,11 +456,17 @@ async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
             past_steps=past_steps,
             current_time=current_time,
             draft=draft,
+            tool_evidence=tool_evidence,
         )
         if not report:
             logger.warning("[Replanner] pro 合成为空且 draft 为空, 走 _force_summary 兜底")
             logger.warning(f"[transition] node=replanner reason={REPLANNER_FINISHED_EMPTY}")
-            report = _force_summary(user_input, past_steps, current_time)
+            report = _force_summary(
+             user_input,
+             past_steps,
+             current_time,
+             tool_evidence=tool_evidence,
+            )
             report = _ensure_report_time(report, current_time)
             return {
                 "response": report,
@@ -380,12 +488,33 @@ async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
         }
 
     # ===== 继续: LLM 给出新计划 =====
-    new_plan = [s for s in (act.plan or []) if s.strip()]
+    
+    raw_new_plan = [
+        s for s in (act.plan or [])
+        if s.strip()
+    ]
+
+    new_plan = sanitize_steps_for_target(
+        raw_new_plan,
+        target_env,
+        append_required_steps=False,
+    )
+
+    logger.info(
+        f"[PlanGuard] llm_replan target={target_env} "
+        f"before={len(raw_new_plan)} "
+        f"after={len(new_plan)}"
+    )
     if not new_plan:
         logger.warning("[Replanner] 标记 not finished 但新计划为空, 兜底生成报告")
         logger.warning(f"[transition] node=replanner reason={REPLANNER_NOT_FINISHED_EMPTY}")
         return {
-            "response": _force_summary(user_input, past_steps, current_time),
+            "response": _force_summary(
+               user_input,
+               past_steps,
+               current_time,
+               tool_evidence=tool_evidence,
+            ),
             "plan": [],
             "transition_history": [
                 make_transition("replanner", REPLANNER_NOT_FINISHED_EMPTY, "is_finished=False 但 plan 为空"),
@@ -405,11 +534,81 @@ async def replan_node(state: PlanExecuteState) -> PlanExecuteState:
     }
 
 
+
 def _force_summary(
     user_input: str,
     past_steps: list[tuple[str, str]],
     current_time: str,
+    tool_evidence: list[dict] | None = None,
 ) -> str:
+    """失败或强制结束时，生成基于实际工具记录的保守报告。"""
+
+    records = tool_evidence or []
+
+    returned = [
+        r for r in records
+        if r.get("status") == "returned"
+    ]
+    failed = [
+        r for r in records
+        if r.get("status") == "failed"
+    ]
+
+    sections = [
+        "# 故障诊断报告",
+        f"**生成时间**: {current_time}",
+        "",
+        "## 一、问题概述",
+        user_input,
+        "",
+        "## 二、实际工具返回",
+    ]
+
+    if returned:
+        for record in returned:
+            name = record.get("tool_name", "unknown")
+            result = str(
+                record.get("result", "")
+            )[:800].replace("\n", " ")
+
+            sections.append(
+                f"- 工具 `{name}` 已返回数据"
+                f"（尚未独立核验）：{result}"
+            )
+    else:
+        sections.append(
+            "没有记录到成功返回的实时工具数据。"
+        )
+
+    sections.extend([
+        "",
+        "## 三、失败或受限的工具",
+    ])
+
+    if failed:
+        for record in failed:
+            name = record.get("tool_name", "unknown")
+            sections.append(
+                f"- `{name}`：调用失败，"
+                "不能作为成功采集的证据。"
+            )
+    else:
+        sections.append("没有记录到明确失败的工具调用。")
+
+    sections.extend([
+        "",
+        "## 四、分析与限制",
+        "本次诊断未完成完整的报告合成流程。",
+        "上述工具记录仅证明有相应返回，"
+        "不能单独证明故障根因。",
+        "未记录的工具调用不得视为已执行。",
+        "",
+        "## 五、建议",
+        "依据已获得的数据继续只读排查；"
+        "如证据不足，应进一步采样或人工确认。"
+    ])
+
+    return "\n".join(sections)
     """硬兜底: 当 LLM 决策失败或超步数, 用模板生成简单报告."""
     if not past_steps:
         return f"# 故障诊断报告\n**生成时间**: {current_time}\n\n## 问题\n{user_input}\n\n## 结论\n诊断流程异常终止, 未能收集到有效信息, 请人工介入。"
