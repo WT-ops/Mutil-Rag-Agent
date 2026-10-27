@@ -1,5 +1,23 @@
 # Multi-Agent AIOps Platform V3
 
+> ## 本仓库说明（Fork）
+>
+> Fork 自 [Kkkirito-123/Mutil-Rag-Agent](https://github.com/Kkkirito-123/Mutil-Rag-Agent)——OnCall 场景的
+> 多智能体诊断平台（LangGraph + Milvus + MCP）。上游是学习型参考工程；本仓库在其骨架上做了约 600 行
+> 功能增强与 158 条单元测试，主题是**让 Agent 的诊断结论可被验证**：
+>
+> | 增强 | 解决的问题 | 入口 |
+> | --- | --- | --- |
+> | 诊断目标识别 | Docker 容器指标 ≠ Windows 宿主机指标，识别错目标会让整份报告失真 | `app/runtime/target_environment.py` |
+> | 计划侧环境校验 | 过滤引用错误环境工具的步骤（13 条歧义问法回归用例保障） | `app/agents/planner.py` |
+> | 执行侧双层拦截 | 工具级硬过滤 + prompt 级环境约束，避免模型"猜"数据来源 | `app/agents/executor.py` |
+> | 工具证据抽取 | 只有真实 `ToolMessage` 算证据；Planner 步骤、模型自述都不算 | `app/runtime/tool_evidence.py` |
+> | 报告证据校验 | 报告若提及未执行过的工具，丢弃该报告并回退保守模板 | `app/agents/replanner.py` |
+> | Windows 主机 MCP | 真实采集 CPU/内存/Top 进程，返回 `source/os/collected_at` 便于溯源 | `mcp_servers/windows_host_server.py` |
+> | 单元测试 + CI | 158 条断言锁定权限矩阵、环境隔离、证据判定与 RRF 排序，不依赖任何外部服务 | `tests/` |
+>
+> 上游 README 原文（含"学习项目、不建议用于生产"的定位）保留在下文，便于对照。
+
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-green)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.x-orange)
