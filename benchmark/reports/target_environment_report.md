@@ -2,7 +2,7 @@
 
 - 数据集：`benchmark/target_environment_cases.jsonl`（25 条）
 - 运行方式：`python scripts/eval_target_environment.py`
-- 生成时间：2026-10-27 16:37
+- 生成时间：2026-11-10 16:45
 - 工具栏：`TOOL_META` 已登记 27 个工具
 - 说明：纯规则实现，不调用 LLM，结果可逐条复现
 

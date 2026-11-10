@@ -26,6 +26,15 @@
 ![Milvus](https://img.shields.io/badge/Milvus-2.4-purple)
 ![MCP](https://img.shields.io/badge/MCP-Tools-black)
 
+## 可验证产出（本项目新增）
+
+| 产出 | 位置 | 复现命令 |
+| --- | --- | --- |
+| 环境隔离评测 | `benchmark/reports/target_environment_report.md`（识别 25/25、错误环境暴露 88→0、计划步骤拦截 238/238） | `python scripts/eval_target_environment.py` |
+| 成本画像 | `benchmark/reports/cost_profile.md`（约 9 次 LLM 调用、7.2k prompt tokens） | `python scripts/cost_profile.py` |
+| 单元测试（158 条） | `tests/` | `pytest -q` |
+| CI | `.github/workflows/ci.yml`（约 3 秒跑完，不依赖 Milvus / Redis） | 推送后自动触发 |
+
 > [!IMPORTANT]
 > ### 学习内容与项目状态
 >

@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
                      "replanner": replanner, "report": report})
         )
 
-    nodes = ["router", "planner", "executor", "replanner", "report"]
+    nodes = ["router", "planner", "executor_sys", "executor", "replanner", "report"]
     print("## 各节点 prompt tokens（启发式估算，±20%）\n")
     print("| 输入 | " + " | ".join(nodes) + " |")
     print("| --- | " + " | ".join("---" for _ in nodes) + " |")
